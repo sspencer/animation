@@ -14,9 +14,11 @@ const (
 	ScreenHeight = 1200
 	MinSpeed     = 100
 	MaxSpeed     = 200
-	NumSnakes    = 14
+	NumSnakes    = 7
 
 	CollisionTime = 1.5
+	HealthCheck   = 5.0
+	Digestion     = 3.0
 )
 
 type Snake struct {
@@ -29,6 +31,7 @@ type Snake struct {
 	radius         float32
 	collisionTime  float64
 	collisionColor rl.Color
+	ateTime        float64
 }
 
 type Food struct {
@@ -37,9 +40,10 @@ type Food struct {
 }
 
 var (
-	background = rl.NewColor(43, 60, 80, 255)
-	snakes     []*Snake
-	food       Food
+	background   = rl.NewColor(43, 60, 80, 255)
+	snakes       []*Snake
+	food         Food
+	healthTicker float64
 )
 
 func main() {
@@ -61,6 +65,11 @@ func main() {
 			update(dt)
 			checkPicnic()
 			checkCollisions()
+			t := rl.GetTime()
+			if t-healthTicker > HealthCheck {
+				healthTicker = t
+				healthCheck()
+			}
 		}
 
 		rl.BeginDrawing()
@@ -95,7 +104,7 @@ func statusLinkSize(y int32) {
 
 	sb.WriteString("Factor:  ")
 	for _, s := range snakes {
-		sb.WriteString(fmt.Sprintf("%s: %3d  ", s.name, int32(s.bodyFactor*100)))
+		sb.WriteString(fmt.Sprintf("[%s]: %3d  ", s.name, int32(s.bodyFactor*100)))
 	}
 
 	rl.DrawText(sb.String(), 10, y, 20, rl.White)
@@ -106,7 +115,7 @@ func statusJoints(y int32) {
 
 	sb.WriteString("Joints:  ")
 	for _, s := range snakes {
-		sb.WriteString(fmt.Sprintf("%s: %3d  ", s.name, len(s.chain.joints)))
+		sb.WriteString(fmt.Sprintf("[%s]: %3d  ", s.name, len(s.chain.joints)))
 	}
 
 	rl.DrawText(sb.String(), 10, y, 20, rl.White)
@@ -116,8 +125,8 @@ func initFood() {
 	radius := rand.Float32()*30 + 10
 	var border float32 = 100.0
 	pos := rl.Vector2{
-		X: border + (rand.Float32()*ScreenWidth - 2*border),
-		Y: border + (rand.Float32()*ScreenHeight - 2*border),
+		X: border + rand.Float32()*(ScreenWidth-2*border),
+		Y: border + rand.Float32()*(ScreenHeight-2*border),
 	}
 
 	food.radius = radius
@@ -164,12 +173,63 @@ func initSnakes() {
 	}
 }
 
-func update(dt float32) {
+func healthCheck() {
+	fmt.Printf("Health check: %v, %0.1f\n", food.pos, food.radius)
 	for _, s := range snakes {
+		s.bodyFactor *= 0.95
+	}
+}
+
+func smellsFood(s *Snake) {
+	// Calculate distance between snake head and food
+	pos1 := vec2(s.chain.joints[0])
+	pos2 := food.pos
+
+	// Calculate distance between centers
+	dx := pos2.X - pos1.X
+	dy := pos2.Y - pos1.Y
+	distance := float32(math.Sqrt(float64(dx*dx) + float64(dy*dy)))
+
+	// If snake is within 250 pixels of food, head towards it and speed up
+	if distance < 500 {
+		// Calculate direction to food
+		dirX := dx / distance
+		dirY := dy / distance
+
+		// Increase speed by 50% when heading towards food
+		speed := float32(math.Sqrt(float64(s.vel.X*s.vel.X+s.vel.Y*s.vel.Y))) * 1.5
+
+		// Set velocity towards food with increased speed
+		s.vel.X = dirX * speed
+		s.vel.Y = dirY * speed
+	}
+}
+
+func update(dt float32) {
+	t := rl.GetTime()
+	for _, s := range snakes {
+		// Check if snake smells food and adjust velocity if needed
+		if t-s.collisionTime > CollisionTime {
+			smellsFood(s)
+		}
+	}
+
+	for _, s := range snakes {
+		// Check if snake has recently eaten food
+		speedFactor := float32(1.0)
+		if s.ateTime > 0 && t-s.ateTime < HealthCheck {
+			// Reduce speed by 50% if snake has eaten food recently
+			speedFactor = 0.5
+		}
+
+		// Apply speed factor to velocity
+		currentVelX := s.vel.X * speedFactor
+		currentVelY := s.vel.Y * speedFactor
+
 		// Update position
 		//fmt.Printf("from: %v ", s.pos)
-		s.pos.X += s.vel.X * dt
-		s.pos.Y += s.vel.Y * dt
+		s.pos.X += currentVelX * dt
+		s.pos.Y += currentVelY * dt
 		//fmt.Printf("to: %v\n", s.pos)
 
 		// Boundary collision detection and response
@@ -192,7 +252,6 @@ func update(dt float32) {
 		s.vel.X = clamp(s.vel.X, MinSpeed, MaxSpeed)
 		s.vel.Y = clamp(s.vel.Y, MinSpeed, MaxSpeed)
 		s.chain.Resolve(vec(s.pos))
-
 	}
 }
 
@@ -225,18 +284,15 @@ func checkPicnic() {
 		minDistance := s1.radius + food.radius
 		if distance < minDistance && distance > 0 {
 			s1.collisionColor = rl.Gold
-			s1.chain.AddJoint()
 			s1.collisionTime = rl.GetTime()
-			sqrt := math.Sqrt(float64(food.radius))
-			s1.bodyFactor += float32(math.Sqrt(float64(food.radius))) / 200.0
+			s1.ateTime = rl.GetTime() // Set the time when food was eaten
 
-			s1.bodyFactor += float32(sqrt / 200.0)
-			n := int(math.Round(sqrt))
-			for j := 0; j < n; j++ {
-				s1.chain.AddJoint()
-			}
-			s1.chain.linkSize++
-			fmt.Printf("Ate food r=%0.2f, sqrt=%0.2f, f2=%0.2f\n", food.radius, sqrt, sqrt/200.0)
+			sqrt := math.Sqrt(float64(food.radius))
+			f := float32(sqrt / 100.0)
+
+			s1.bodyFactor += f
+
+			fmt.Printf("%s ate food f=%0.2f\n", s1.name, f)
 			initFood()
 		}
 	}
@@ -245,8 +301,10 @@ func checkPicnic() {
 func checkCollisions() {
 	deleteId := -1
 	for i, s := range snakes {
-		if len(s.chain.joints) < 6 || s.bodyFactor < 0.12 {
-			fmt.Printf("Deleting %s, f=%0.2f, joints=%d\n", s.name, s.bodyFactor, len(s.chain.joints))
+		n := len(s.chain.joints)
+		f := s.bodyFactor
+		if n < 6 || n > 50 || f < 0.1 || f > 0.75 {
+			fmt.Printf("Deleting %s, f=%0.2f, joints=%d\n", s.name, f, n)
 			deleteId = i
 		}
 	}
@@ -281,10 +339,11 @@ func checkCollisions() {
 				if t-s1.collisionTime > CollisionTime && t-s2.collisionTime > CollisionTime {
 					s1.collisionTime = t
 					s2.collisionTime = t
-					//m1 := math.Sqrt(float64(s1.vel.X*s1.vel.X) + float64(s1.vel.Y*s1.vel.Y))
-					//m2 := math.Sqrt(float64(s2.vel.X*s2.vel.X) + float64(s2.vel.Y*s2.vel.Y))
+					m1 := math.Sqrt(float64(s1.vel.X*s1.vel.X) + float64(s1.vel.Y*s1.vel.Y))
+					m2 := math.Sqrt(float64(s2.vel.X*s2.vel.X) + float64(s2.vel.Y*s2.vel.Y))
 					var winner, loser *Snake
-					if s1.bodyFactor > s2.bodyFactor {
+
+					if m1 > m2 {
 						winner = s1
 						loser = s2
 					} else {
@@ -292,18 +351,24 @@ func checkCollisions() {
 						loser = s1
 					}
 
-					winner.bodyFactor += 0.01
-					winner.chain.AddJoint()
-					winner.collisionColor = collisionAddColor
+					// 5% exchange
+					n := int(math.Round(0.05 * float64(len(winner.chain.joints))))
+					if n < 1 {
+						n = 1
+					}
+					fmt.Printf("Exchange %d joints between %s (winner) and %s\n", n, winner.name, loser.name)
+					for k := 0; k < n; k++ {
+						winner.chain.AddJoint()
+						loser.chain.DeleteJoint()
+					}
 
-					loser.bodyFactor -= 0.01
-					loser.chain.DeleteJoint()
+					winner.collisionColor = collisionAddColor
 					loser.collisionColor = collisionDeleteColor
 				}
 
 				resolveCollisionWithMass(s1, s2, dx, dy, distance)
 				s1.chain.Resolve(vec(s1.pos))
-				s1.chain.Resolve(vec(s2.pos))
+				s2.chain.Resolve(vec(s2.pos))
 
 			}
 		}
@@ -416,6 +481,12 @@ func drawSnakes() {
 		b := bodyWidth(0, bodyFactor)
 		color.A = 204
 		rl.DrawCircle(int32(joint.X), int32(joint.Y), b, color)
+
+		// Show visual indicator when snake is in slow state after eating food
+		if s.ateTime > 0 && rl.GetTime()-s.ateTime < Digestion {
+			slowColor := rl.NewColor(0, 191, 255, 153) // Deep Sky Blue with transparency
+			rl.DrawCircle(int32(joint.X), int32(joint.Y), b*1.4, slowColor)
+		}
 
 		if s.collisionTime > 0 && rl.GetTime()-s.collisionTime < CollisionTime {
 			rl.DrawCircle(int32(joint.X), int32(joint.Y), b*1.5, s.collisionColor)
