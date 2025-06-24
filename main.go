@@ -317,7 +317,7 @@ func checkCollisions() {
 	collisionDeleteColor := rl.NewColor(255, 0, 0, 153)
 
 	// Check collisions between all pairs of snakes
-	for i := 0; i < len(snakes); i++ {
+	for i := 0; i < len(snakes)-1; i++ {
 		for j := i + 1; j < len(snakes); j++ {
 			s1 := snakes[i]
 			s2 := snakes[j]
@@ -401,9 +401,9 @@ func resolveCollisionWithMass(s1, s2 *Snake, dx, dy, distance float32) {
 	separation2 := overlap * (mass1 / totalMass)
 
 	s1.pos.X -= nx * separation1
-	s1.pos.X -= ny * separation1
+	s1.pos.Y -= ny * separation1
 	s2.pos.X += nx * separation2
-	s2.pos.X += ny * separation2
+	s2.pos.Y += ny * separation2
 
 	// Calculate relative velocity
 	relVelX := s2.vel.X - s1.vel.X
