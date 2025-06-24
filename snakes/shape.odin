@@ -142,8 +142,8 @@ draw_smooth_snake :: proc(points: []rl.Vector2, thicknesses: []f32, color1, colo
     rl.DrawCircleV(interp_points[0], interp_thicknesses[0] / 2.0, color1)
     rl.DrawCircleV(
         interp_points[len(interp_points) - 1],
-        interp_thicknesses[len(interp_points) - 1] / 2.5,
-        color1,
+        interp_thicknesses[len(interp_points) - 1] / 2.0,
+        color2,
     )
 }
 
