@@ -182,10 +182,11 @@ resolve_collision_with_mass :: proc(s1, s2: ^Snake, r1, r2, dx, dy, distance: f3
     nx := dx / distance
     ny := dy / distance
 
-    // Calculate masses based on ball radius (assuming density is constant)
+    // Calculate masses based on radius + body length
     // Mass proportional to area: mass = π * r²
-    mass1 := f32(math.PI) * r1 * r1
-    mass2 := f32(math.PI) * r2 * r2
+    mass1 := f32(math.PI) * r1 * r1 + (f32(len(s1.chain.joints)) * s1.chain.linkSize * s1.body * 3.0)
+    mass2 := f32(math.PI) * r2 * r2 + (f32(len(s2.chain.joints)) * s2.chain.linkSize * s2.body * 3.0)
+    //fmt.printf("m1=%f, m2=%f\n", mass1, mass2)
     total_mass := mass1 + mass2
 
     // Separate the balls to prevent overlap based on mass ratio
@@ -212,7 +213,7 @@ resolve_collision_with_mass :: proc(s1, s2: ^Snake, r1, r2, dx, dy, distance: f3
     }
 
     // Calculate restitution (bounciness) - perfect elastic collision
-    restitution := 1.0
+    restitution := 4.0
 
     // Calculate impulse scalar using proper mass formula
     impulse := f32(1.0 + restitution) * speed / (1.0 / mass1 + 1.0 / mass2)
