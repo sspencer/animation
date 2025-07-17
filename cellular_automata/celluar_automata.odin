@@ -4,11 +4,11 @@ import  "core:fmt"
 import  "core:math/rand"
 import rl "vendor:raylib"
 
-ZONES :: 40
+ZONES :: 10
 SCREEN_WIDTH :: 16 * ZONES
 SCREEN_HEIGHT :: 9 * ZONES
 BOTTOM :: 12
-ZOOM :: 2
+ZOOM :: 8
 ADJUST :: 0.01
 
 noise: [SCREEN_HEIGHT][SCREEN_WIDTH]bool
@@ -20,7 +20,7 @@ main :: proc() {
 
     rl.SetTargetFPS(60)
 
-    factor :f32 = 0.5
+    factor :f32 = 0.37
     update_noise(factor)
     smooth := 0
 
@@ -34,7 +34,7 @@ main :: proc() {
                 factor -= ADJUST
             }
             update_noise(factor)
-            for i in 0..<smooth {
+            for i in 0 ..< smooth {
                 moore_neighborhood()
             }
         }
@@ -42,14 +42,14 @@ main :: proc() {
         if rl.IsKeyPressed(.UP) {
             factor += ADJUST
             update_noise(factor)
-            for i in 0..<smooth {
+            for i in 0 ..< smooth {
                 moore_neighborhood()
             }
         }
 
         if rl.IsKeyPressed(.SPACE) {
             update_noise(factor)
-            for i in 0..<smooth {
+            for i in 0 ..< smooth {
                 moore_neighborhood()
             }
         }
@@ -58,7 +58,7 @@ main :: proc() {
             if smooth > 0 {
                 smooth -= 1
                 update_noise(factor)
-                for i in 0..<smooth {
+                for i in 0 ..< smooth {
                     moore_neighborhood()
                 }
             }
@@ -95,7 +95,7 @@ draw_noise :: proc() {
     for y in 0 ..< SCREEN_HEIGHT {
         for x in 0 ..< SCREEN_WIDTH {
             if noise[y][x] {
-                rl.DrawPixel(i32(x), i32(y), rl.WHITE)
+                rl.DrawPixel(i32(x), i32(y), rl.GREEN)
             }
         }
     }
@@ -113,8 +113,14 @@ moore_neighborhood :: proc() {
     for y in 0 ..< SCREEN_HEIGHT {
         for x in 0 ..< SCREEN_WIDTH {
             walls := 0
-            for offset_y in -1..=1 {
-                for offset_x in -1..=1 {
+            border := false
+            for offset_y in -1 ..= 1 {
+                for offset_x in -1 ..= 1 {
+
+                    if offset_x == 0 && offset_y == 0 {
+                        continue
+                    }
+
                     dx := x + offset_x
                     dy := y + offset_y
 
@@ -126,7 +132,7 @@ moore_neighborhood :: proc() {
                 }
             }
 
-            next[y][x] = walls <= 4
+            next[y][x] = walls < 5
         }
     }
 
